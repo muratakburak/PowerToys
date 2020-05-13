@@ -2,7 +2,7 @@
 using System;
 using Windows.UI.Xaml.Controls;
 using PowerToys_Settings_Sandbox.ViewModels;
-
+using Windows.UI.Xaml.Navigation;
 
 namespace PowerToys_Settings_Sandbox.Views
 {
@@ -13,14 +13,28 @@ namespace PowerToys_Settings_Sandbox.Views
         public MainPage()
         {
             InitializeComponent();
-            powerOnLaunchDialog();
         }
-        private async void powerOnLaunchDialog()
+
+        protected override void OnNavigatedTo(NavigationEventArgs e)
+        {
+            if (e.Parameter is string x)
+            {
+                if (x == "FirstOpen")
+                {
+                    powerOnLaunchDialog();
+                }
+                else if (x == "NewUpdateOpen")
+                {
+
+                }
+            }
+        }
+
+        public async void powerOnLaunchDialog()
         {
             onLaunchContentDialog dialog = new onLaunchContentDialog();
             dialog.PrimaryButtonClick += Dialog_PrimaryButtonClick;
             await dialog.ShowAsync();
-
         }
 
         private void Dialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
