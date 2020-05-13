@@ -18,18 +18,13 @@ namespace PowerToys_Settings_Sandbox.Services
 
             string onActionClick = new QueryString()
                 {
-                    { "action", "openApp"},
-                    { "status", "openFirst"},
+                    { "action", "OpenApp"},
+                    { "status", "FirstOpen"},
                 }.ToString();
 
             ToastActionsCustom actions = createToastAction("Get Started", onActionClick);
 
-            string onLaunch = new QueryString()
-                {
-                    {"action", "openApp"},
-                }.ToString();
-
-            ToastContent toastContent = createToastContent(visual, actions, onLaunch);
+            ToastContent toastContent = createToastContent(visual, actions, onActionClick);
 
             ToastNotification toast = new ToastNotification(toastContent.GetXml());
 
@@ -49,18 +44,13 @@ namespace PowerToys_Settings_Sandbox.Services
 
             string onActionClick = new QueryString()
                 {
-                    { "action", "openApp"},
-                    { "status", "openUpdate"},
+                    { "action", "OpenApp"},
+                    { "status", "NewUpdateOpen"},
                 }.ToString();
 
             ToastActionsCustom actions = createToastAction("See Updates", onActionClick);
 
-            string onLaunch = new QueryString()
-                {
-                    {"action", "openApp"},
-                }.ToString();
-
-            ToastContent toastContent = createToastContent(visual, actions, onLaunch);
+            ToastContent toastContent = createToastContent(visual, actions, onActionClick);
 
             ToastNotification toast = new ToastNotification(toastContent.GetXml());
 
@@ -87,7 +77,7 @@ namespace PowerToys_Settings_Sandbox.Services
 
             string onLaunch = new QueryString()
                 {
-                    {"action", "openApp"},
+                    {"action", "OpenApp"},
                 }.ToString();
 
             ToastContent toastContent = createToastContent(visual, actions, onLaunch);
@@ -141,11 +131,7 @@ namespace PowerToys_Settings_Sandbox.Services
                 Buttons =
                     {
                         new ToastButtonDismiss("Not now"),
-                        new ToastButton("Get Started", new QueryString()
-                        {
-                            {"action", "openApp"},
-                            {"status", "openFirst"},
-                        }.ToString()),
+                        new ToastButton(title, query),
                     }
             };
             return actions;
