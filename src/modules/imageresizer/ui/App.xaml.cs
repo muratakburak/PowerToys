@@ -11,6 +11,7 @@ using ImageResizer.Properties;
 using ImageResizer.Utilities;
 using ImageResizer.ViewModels;
 using ImageResizer.Views;
+using Windows.Graphics.Capture;
 
 namespace ImageResizer
 {
@@ -32,6 +33,11 @@ namespace ImageResizer
 
             // Temporary workaround for issue #1273
             BecomeForegroundWindow(new System.Windows.Interop.WindowInteropHelper(mainWindow).Handle);
+
+            if (!GraphicsCaptureSession.IsSupported())
+            {
+                throw new Exception("Capture not supported in this machine");
+            }
         }
 
         private void BecomeForegroundWindow(IntPtr hWnd)
