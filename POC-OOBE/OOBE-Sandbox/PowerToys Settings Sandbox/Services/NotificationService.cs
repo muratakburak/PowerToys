@@ -36,7 +36,7 @@ namespace PowerToys_Settings_Sandbox.Services
 
         public static void AppUpdatedToast()
         {
-            string title = "Power Toys Updated";
+            string title = "New PowerToys Update";
             string content = "";
             string logo = "../Assets/MiniLogo.png";
 
