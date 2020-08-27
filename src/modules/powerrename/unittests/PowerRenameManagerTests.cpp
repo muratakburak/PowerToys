@@ -82,29 +82,41 @@ namespace PowerRenameManagerTests
             wchar_t newReplaceTerm[MAX_PATH] = { 0 };
             CComPtr<IPowerRenameRegEx> renRegEx;
             Assert::IsTrue(mgr->GetRenameRegEx(&renRegEx) == S_OK);
-            renRegEx->PutFlags(flags);
-            renRegEx->PutSearchTerm(searchTerm.c_str());
+            Assert::IsTrue(SUCCEEDED(renRegEx->PutFlags(flags)));
+            Assert::IsTrue(SUCCEEDED(renRegEx->PutSearchTerm(searchTerm.c_str())));
             if (isFileAttributesUsed(replaceTerm.c_str()) && SUCCEEDED(GetDatedFileName(newReplaceTerm, ARRAYSIZE(newReplaceTerm), replaceTerm.c_str(), LocalTime)))
             {
-                renRegEx->PutReplaceTerm(newReplaceTerm);
+                Assert::IsTrue(SUCCEEDED(renRegEx->PutReplaceTerm(newReplaceTerm)));
             }
             else
             {
-                renRegEx->PutReplaceTerm(replaceTerm.c_str());
+                Assert::IsTrue(SUCCEEDED(renRegEx->PutReplaceTerm(replaceTerm.c_str())));
             }
-            Sleep(1000);
+            Sleep(100);
 
             // Perform the rename
             Assert::IsTrue(mgr->Rename(0) == S_OK);
 
-            Sleep(1000);
-
-            // Verify the rename occurred
-            for (int i = 0; i < numPairs; i++)
+            // Poll in every 250ms, timeout in 5000ms
+            bool filesExist = true;
+            for (int i = 0; i < 20; i++)
             {
-                Assert::IsTrue(testFileHelper.PathExists(renamePairs[i].originalName) == !renamePairs[i].shouldRename);
-                Assert::IsTrue(testFileHelper.PathExists(renamePairs[i].newName) == renamePairs[i].shouldRename);
+                filesExist = true;
+                // Verify the rename occurred
+                for (int i = 0; i < numPairs; i++)
+                {
+                    filesExist &= testFileHelper.PathExists(renamePairs[i].originalName) == !renamePairs[i].shouldRename;
+                    filesExist &= testFileHelper.PathExists(renamePairs[i].newName) == renamePairs[i].shouldRename;
+                }
+
+                if (filesExist)
+                {
+                    break;
+                }
+                Sleep(250);
             }
+
+            Assert::IsTrue(filesExist);
 
             Assert::IsTrue(mgr->Shutdown() == S_OK);
 
