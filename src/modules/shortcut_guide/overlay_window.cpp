@@ -38,21 +38,38 @@ D2DOverlaySVG& D2DOverlaySVG::resize(int x, int y, int width, int height, float 
 
 D2DOverlaySVG& D2DOverlaySVG::find_thumbnail(const std::wstring& id)
 {
-    winrt::com_ptr<ID2D1SvgElement> thumbnail_box;
-    winrt::check_hresult(svg->FindElementById(id.c_str(), thumbnail_box.put()));
-    winrt::check_hresult(thumbnail_box->GetAttributeValue(L"x", &thumbnail_top_left.x));
-    winrt::check_hresult(thumbnail_box->GetAttributeValue(L"y", &thumbnail_top_left.y));
-    winrt::check_hresult(thumbnail_box->GetAttributeValue(L"width", &thumbnail_bottom_right.x));
-    thumbnail_bottom_right.x += thumbnail_top_left.x;
-    winrt::check_hresult(thumbnail_box->GetAttributeValue(L"height", &thumbnail_bottom_right.y));
-    thumbnail_bottom_right.y += thumbnail_top_left.y;
+    try
+    {
+        winrt::com_ptr<ID2D1SvgElement> thumbnail_box;
+        winrt::check_hresult(svg->FindElementById(id.c_str(), thumbnail_box.put()));
+        winrt::check_hresult(thumbnail_box->GetAttributeValue(L"x", &thumbnail_top_left.x));
+        winrt::check_hresult(thumbnail_box->GetAttributeValue(L"y", &thumbnail_top_left.y));
+        winrt::check_hresult(thumbnail_box->GetAttributeValue(L"width", &thumbnail_bottom_right.x));
+        thumbnail_bottom_right.x += thumbnail_top_left.x;
+        winrt::check_hresult(thumbnail_box->GetAttributeValue(L"height", &thumbnail_bottom_right.y));
+        thumbnail_bottom_right.y += thumbnail_top_left.y;
+    }
+    catch (winrt::hresult_error const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            throw L"Failed at D2DOverlaySVG::find_thumbnail.";
+            fatalErrorOccurred = true;
+        }
+    }
+    
     return *this;
 }
 
 D2DOverlaySVG& D2DOverlaySVG::find_window_group(const std::wstring& id)
 {
     window_group = nullptr;
-    winrt::check_hresult(svg->FindElementById(id.c_str(), window_group.put()));
+    if (FAILED(svg->FindElementById(id.c_str(), window_group.put())))
+    {
+        MessageBox(NULL, L"Failed at D2DOverlaySVG::find_window_group.\nPlease report the bug to https://aka.ms/powerToysReportBug", L"PowerToys Error", MB_OK);
+        throw L"Failed at D2DOverlaySVG::find_window_group";
+    }
+    
     return *this;
 }
 
@@ -86,7 +103,16 @@ ScaleResult D2DOverlaySVG::get_thumbnail_rect_and_scale(int x_offset, int y_offs
 winrt::com_ptr<ID2D1SvgElement> D2DOverlaySVG::find_element(const std::wstring& id)
 {
     winrt::com_ptr<ID2D1SvgElement> element;
-    winrt::check_hresult(svg->FindElementById(id.c_str(), element.put()));
+    if (FAILED(svg->FindElementById(id.c_str(), element.put())))
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Failed at D2DOverlaySVG::find_element.\nPlease report the bug to https://aka.ms/powerToysReportBug", L"PowerToys Error", MB_OK);
+            fatalErrorOccurred = true;
+            throw L"Failed at D2DOverlaySVG::find_element";
+        }
+    }
+    
     return element;
 }
 
@@ -212,6 +238,10 @@ D2DOverlayWindow::D2DOverlayWindow(std::optional<std::function<std::remove_point
 
 void D2DOverlayWindow::show(HWND active_window, bool snappable)
 {
+    if (fatalErrorOccurred)
+    {
+        return;
+    }
     std::unique_lock lock(mutex);
     hidden = false;
     tasklist_buttons.clear();
@@ -220,34 +250,48 @@ void D2DOverlayWindow::show(HWND active_window, bool snappable)
     auto old_bck = colors.start_color_menu;
     auto colors_updated = colors.update();
     auto new_light_mode = (theme_setting == Light) || (theme_setting == System && colors.light_mode);
-    if (initialized && (colors_updated || light_mode != new_light_mode))
+
+    try
     {
-        // update background colors
-        landscape.recolor(old_bck, colors.start_color_menu);
-        portrait.recolor(old_bck, colors.start_color_menu);
-        for (auto& arrow : arrows)
+        if (initialized && (colors_updated || light_mode != new_light_mode))
         {
-            arrow.recolor(old_bck, colors.start_color_menu);
-        }
-        light_mode = new_light_mode;
-        if (light_mode)
-        {
-            landscape.recolor(0xDDDDDD, 0x222222);
-            portrait.recolor(0xDDDDDD, 0x222222);
+            // update background colors
+            landscape.recolor(old_bck, colors.start_color_menu);
+            portrait.recolor(old_bck, colors.start_color_menu);
             for (auto& arrow : arrows)
             {
-                arrow.recolor(0xDDDDDD, 0x222222);
+                arrow.recolor(old_bck, colors.start_color_menu);
             }
-        }
-        else
-        {
-            landscape.recolor(0x222222, 0xDDDDDD);
-            portrait.recolor(0x222222, 0xDDDDDD);
-            for (auto& arrow : arrows)
+            light_mode = new_light_mode;
+            if (light_mode)
             {
-                arrow.recolor(0x222222, 0xDDDDDD);
+                landscape.recolor(0xDDDDDD, 0x222222);
+                portrait.recolor(0xDDDDDD, 0x222222);
+                for (auto& arrow : arrows)
+                {
+                    arrow.recolor(0xDDDDDD, 0x222222);
+                }
+            }
+            else
+            {
+                landscape.recolor(0x222222, 0xDDDDDD);
+                portrait.recolor(0x222222, 0xDDDDDD);
+                for (auto& arrow : arrows)
+                {
+                    arrow.recolor(0x222222, 0xDDDDDD);
+                }
             }
         }
+    }
+    catch (PWSTR const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Fatal Error Occurred.\nPlease report the bug to https://aka.ms/powerToysReportBug", ex, MB_OK);
+            fatalErrorOccurred = true;
+            throw ex;
+        }
+        
     }
     monitors = MonitorInfo::GetMonitors(true);
     // calculate the rect covering all the screens
@@ -486,31 +530,43 @@ float D2DOverlayWindow::get_overlay_opacity()
 
 void D2DOverlayWindow::init()
 {
-    colors.update();
-    landscape.load(L"svgs\\overlay.svg", d2d_dc.get())
-        .find_thumbnail(L"path-1")
-        .find_window_group(L"Group-1")
-        .recolor(0x000000, colors.start_color_menu);
-    portrait.load(L"svgs\\overlay_portrait.svg", d2d_dc.get())
-        .find_thumbnail(L"path-1")
-        .find_window_group(L"Group-1")
-        .recolor(0x000000, colors.start_color_menu);
-    no_active.load(L"svgs\\no_active_window.svg", d2d_dc.get());
-    arrows.resize(10);
-    for (unsigned i = 0; i < arrows.size(); ++i)
+    try
     {
-        arrows[i].load(L"svgs\\" + std::to_wstring((i + 1) % 10) + L".svg", d2d_dc.get()).recolor(0x000000, colors.start_color_menu);
-    }
-    light_mode = (theme_setting == Light) || (theme_setting == System && colors.light_mode);
-    if (!light_mode)
-    {
-        landscape.recolor(0x222222, 0xDDDDDD);
-        portrait.recolor(0x222222, 0xDDDDDD);
-        for (auto& arrow : arrows)
+        colors.update();
+        landscape.load(L"svgs\\overlay.svg", d2d_dc.get())
+            .find_thumbnail(L"path-1")
+            .find_window_group(L"Group-1")
+            .recolor(0x000000, colors.start_color_menu);
+        portrait.load(L"svgs\\overlay_portrait.svg", d2d_dc.get())
+            .find_thumbnail(L"path-1")
+            .find_window_group(L"Group-1")
+            .recolor(0x000000, colors.start_color_menu);
+        no_active.load(L"svgs\\no_active_window.svg", d2d_dc.get());
+        arrows.resize(10);
+        for (unsigned i = 0; i < arrows.size(); ++i)
         {
-            arrow.recolor(0x222222, 0xDDDDDD);
+            arrows[i].load(L"svgs\\" + std::to_wstring((i + 1) % 10) + L".svg", d2d_dc.get()).recolor(0x000000, colors.start_color_menu);
+        }
+        light_mode = (theme_setting == Light) || (theme_setting == System && colors.light_mode);
+        if (!light_mode)
+        {
+            landscape.recolor(0x222222, 0xDDDDDD);
+            portrait.recolor(0x222222, 0xDDDDDD);
+            for (auto& arrow : arrows)
+            {
+                arrow.recolor(0x222222, 0xDDDDDD);
+            }
         }
     }
+    catch (PWSTR const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Fatal Error Occurred.\nPlease report the bug to https://aka.ms/powerToysReportBug", ex, MB_OK);
+            fatalErrorOccurred = true;
+        }
+    }
+    
 }
 
 void D2DOverlayWindow::resize()
@@ -536,7 +592,18 @@ void D2DOverlayWindow::resize()
                      thumb_no_active_rect.right - thumb_no_active_rect.left,
                      thumb_no_active_rect.bottom - thumb_no_active_rect.top,
                      1.0f);
-    text.resize(font, use_overlay->get_scale());
+    try
+    {
+        text.resize(font, use_overlay->get_scale());
+    }
+    catch (PWSTR const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Fatal Error Occurred.\nPlease report the bug to https://aka.ms/powerToysReportBug", ex, MB_OK);
+            fatalErrorOccurred = true;
+        }
+    }
 }
 
 void render_arrow(D2DSVG& arrow, TasklistButton& button, RECT window, float max_scale, ID2D1DeviceContext5* d2d_dc)
@@ -631,259 +698,278 @@ void D2DOverlayWindow::render(ID2D1DeviceContext5* d2d_dc)
         return;
     }
 
-    d2d_dc->Clear();
-    int x_offset = 0, y_offset = 0, dimension = 0;
-    auto current_anim_value = (float)animation.value(Animation::AnimFunctions::LINEAR);
-    SetLayeredWindowAttributes(hwnd, 0, (int)(255 * current_anim_value), LWA_ALPHA);
-    double pos_anim_value = 1 - animation.value(Animation::AnimFunctions::EASE_OUT_EXPO);
-    if (!tasklist_buttons.empty())
+    try
     {
-        if (tasklist_buttons[0].x <= window_rect.left)
-        { // taskbar on left
-            x_offset = (int)(-pos_anim_value * use_overlay->width() * use_overlay->get_scale());
-        }
-        if (tasklist_buttons[0].x >= window_rect.right)
-        { // taskbar on right
-            x_offset = (int)(pos_anim_value * use_overlay->width() * use_overlay->get_scale());
-        }
-        if (tasklist_buttons[0].y <= window_rect.top)
-        { // taskbar on top
-            y_offset = (int)(-pos_anim_value * use_overlay->height() * use_overlay->get_scale());
-        }
-        if (tasklist_buttons[0].y >= window_rect.bottom)
-        { // taskbar on bottom
-            y_offset = (int)(pos_anim_value * use_overlay->height() * use_overlay->get_scale());
-        }
-    }
-    else
-    {
-        x_offset = 0;
-        y_offset = (int)(pos_anim_value * use_overlay->height() * use_overlay->get_scale());
-    }
-    // Draw background
-    winrt::com_ptr<ID2D1SolidColorBrush> brush;
-    float brush_opacity = get_overlay_opacity();
-    D2D1_COLOR_F brushColor = light_mode ? D2D1::ColorF(1.0f, 1.0f, 1.0f, brush_opacity) : D2D1::ColorF(0, 0, 0, brush_opacity);
-    winrt::check_hresult(d2d_dc->CreateSolidColorBrush(brushColor, brush.put()));
-    D2D1_RECT_F background_rect = {};
-    background_rect.bottom = (float)window_height;
-    background_rect.right = (float)window_width;
-    d2d_dc->SetTransform(D2D1::Matrix3x2F::Identity());
-    d2d_dc->FillRectangle(background_rect, brush.get());
-
-    // Thumbnail logic:
-    auto window_state = get_window_state(active_window);
-    auto thumb_window = get_window_pos(active_window);
-    bool miniature_shown = active_window != nullptr && thumbnail != nullptr && thumb_window && window_state != MINIMIZED;
-    RECT client_rect;
-    if (thumb_window && GetClientRect(active_window, &client_rect))
-    {
-        int dx = ((thumb_window->right - thumb_window->left) - (client_rect.right - client_rect.left)) / 2;
-        int dy = ((thumb_window->bottom - thumb_window->top) - (client_rect.bottom - client_rect.top)) / 2;
-        thumb_window->left += dx;
-        thumb_window->right -= dx;
-        thumb_window->top += dy;
-        thumb_window->bottom -= dy;
-    }
-    if (miniature_shown && thumb_window->right - thumb_window->left <= 0 || thumb_window->bottom - thumb_window->top <= 0)
-    {
-        miniature_shown = false;
-    }
-    bool render_monitors = true;
-    auto total_monitor_with_screen = total_screen;
-    if (thumb_window)
-    {
-        total_monitor_with_screen.rect.left = min(total_monitor_with_screen.rect.left, thumb_window->left + monitor_dx);
-        total_monitor_with_screen.rect.top = min(total_monitor_with_screen.rect.top, thumb_window->top + monitor_dy);
-        total_monitor_with_screen.rect.right = max(total_monitor_with_screen.rect.right, thumb_window->right + monitor_dx);
-        total_monitor_with_screen.rect.bottom = max(total_monitor_with_screen.rect.bottom, thumb_window->bottom + monitor_dy);
-    }
-    // Only allow the new rect being slight bigger.
-    if (total_monitor_with_screen.width() - total_screen.width() > (thumb_window->right - thumb_window->left) / 2 ||
-        total_monitor_with_screen.height() - total_screen.height() > (thumb_window->bottom - thumb_window->top) / 2)
-    {
-        render_monitors = false;
-    }
-    if (window_state == MINIMIZED)
-    {
-        total_monitor_with_screen = total_screen;
-    }
-    auto rect_and_scale = use_overlay->get_thumbnail_rect_and_scale(0, 0, total_monitor_with_screen.width(), total_monitor_with_screen.height(), 1);
-    if (miniature_shown)
-    {
-        RECT thumbnail_pos;
-        if (render_monitors)
+        d2d_dc->Clear();
+        int x_offset = 0, y_offset = 0, dimension = 0;
+        auto current_anim_value = (float)animation.value(Animation::AnimFunctions::LINEAR);
+        SetLayeredWindowAttributes(hwnd, 0, (int)(255 * current_anim_value), LWA_ALPHA);
+        double pos_anim_value = 1 - animation.value(Animation::AnimFunctions::EASE_OUT_EXPO);
+        if (!tasklist_buttons.empty())
         {
-            thumbnail_pos.left = (int)((thumb_window->left + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
-            thumbnail_pos.top = (int)((thumb_window->top + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
-            thumbnail_pos.right = (int)((thumb_window->right + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
-            thumbnail_pos.bottom = (int)((thumb_window->bottom + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
+            if (tasklist_buttons[0].x <= window_rect.left)
+            { // taskbar on left
+                x_offset = (int)(-pos_anim_value * use_overlay->width() * use_overlay->get_scale());
+            }
+            if (tasklist_buttons[0].x >= window_rect.right)
+            { // taskbar on right
+                x_offset = (int)(pos_anim_value * use_overlay->width() * use_overlay->get_scale());
+            }
+            if (tasklist_buttons[0].y <= window_rect.top)
+            { // taskbar on top
+                y_offset = (int)(-pos_anim_value * use_overlay->height() * use_overlay->get_scale());
+            }
+            if (tasklist_buttons[0].y >= window_rect.bottom)
+            { // taskbar on bottom
+                y_offset = (int)(pos_anim_value * use_overlay->height() * use_overlay->get_scale());
+            }
         }
         else
         {
-            thumbnail_pos = use_overlay->get_thumbnail_rect_and_scale(0, 0, thumb_window->right - thumb_window->left, thumb_window->bottom - thumb_window->top, 1).rect;
+            x_offset = 0;
+            y_offset = (int)(pos_anim_value * use_overlay->height() * use_overlay->get_scale());
         }
-        // If the animation is done show the thumbnail
-        //   we cannot animate the thumbnail, the animation lags behind
-        miniature_shown = show_thumbnail(thumbnail_pos, current_anim_value);
-    }
-    else
-    {
-        hide_thumbnail();
-    }
-    if (window_state == MINIMIZED)
-    {
-        render_monitors = true;
-    }
-    // render the monitors
-    if (render_monitors)
-    {
-        brushColor = D2D1::ColorF(colors.desktop_fill_color, miniature_shown ? current_anim_value : current_anim_value * 0.3f);
-        brush = nullptr;
+        // Draw background
+        winrt::com_ptr<ID2D1SolidColorBrush> brush;
+        float brush_opacity = get_overlay_opacity();
+        D2D1_COLOR_F brushColor = light_mode ? D2D1::ColorF(1.0f, 1.0f, 1.0f, brush_opacity) : D2D1::ColorF(0, 0, 0, brush_opacity);
         winrt::check_hresult(d2d_dc->CreateSolidColorBrush(brushColor, brush.put()));
-        for (auto& monitor : monitors)
+        D2D1_RECT_F background_rect = {};
+        background_rect.bottom = (float)window_height;
+        background_rect.right = (float)window_width;
+        d2d_dc->SetTransform(D2D1::Matrix3x2F::Identity());
+        d2d_dc->FillRectangle(background_rect, brush.get());
+
+        // Thumbnail logic:
+        auto window_state = get_window_state(active_window);
+        auto thumb_window = get_window_pos(active_window);
+        bool miniature_shown = active_window != nullptr && thumbnail != nullptr && thumb_window && window_state != MINIMIZED;
+        RECT client_rect;
+        if (thumb_window && GetClientRect(active_window, &client_rect))
         {
-            D2D1_RECT_F monitor_rect;
-            monitor_rect.left = (float)((monitor.rect.left + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
-            monitor_rect.top = (float)((monitor.rect.top + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
-            monitor_rect.right = (float)((monitor.rect.right + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
-            monitor_rect.bottom = (float)((monitor.rect.bottom + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
-            d2d_dc->SetTransform(D2D1::Matrix3x2F::Identity());
-            d2d_dc->FillRectangle(monitor_rect, brush.get());
+            int dx = ((thumb_window->right - thumb_window->left) - (client_rect.right - client_rect.left)) / 2;
+            int dy = ((thumb_window->bottom - thumb_window->top) - (client_rect.bottom - client_rect.top)) / 2;
+            thumb_window->left += dx;
+            thumb_window->right -= dx;
+            thumb_window->top += dy;
+            thumb_window->bottom -= dy;
         }
-    }
-    // Finalize the overlay - dimm the buttons if no thumbnail is present and show "No active window"
-    use_overlay->toggle_window_group(miniature_shown || window_state == MINIMIZED);
-    if (!miniature_shown && window_state != MINIMIZED)
-    {
-        no_active.render(d2d_dc);
-        window_state = UNKNOWN;
-    }
-
-    // Set the animation - move the draw window according to animation step
-    auto popIn = D2D1::Matrix3x2F::Translation((float)x_offset, (float)y_offset);
-    d2d_dc->SetTransform(popIn);
-
-    // Animate keys
-    for (unsigned id = 0; id < key_animations.size();)
-    {
-        auto& animation = key_animations[id];
-        D2D1_COLOR_F color;
-        auto value = (float)animation.animation.value(Animation::AnimFunctions::EASE_OUT_EXPO);
-        color.a = 1.0f;
-        color.r = animation.original.r + (1.0f - animation.original.r) * value;
-        color.g = animation.original.g + (1.0f - animation.original.g) * value;
-        color.b = animation.original.b + (1.0f - animation.original.b) * value;
-        animation.button->SetAttributeValue(L"fill", color);
-        if (animation.animation.done())
+        if (miniature_shown && thumb_window->right - thumb_window->left <= 0 || thumb_window->bottom - thumb_window->top <= 0)
         {
-            if (value == 1)
+            miniature_shown = false;
+        }
+        bool render_monitors = true;
+        auto total_monitor_with_screen = total_screen;
+        if (thumb_window)
+        {
+            total_monitor_with_screen.rect.left = min(total_monitor_with_screen.rect.left, thumb_window->left + monitor_dx);
+            total_monitor_with_screen.rect.top = min(total_monitor_with_screen.rect.top, thumb_window->top + monitor_dy);
+            total_monitor_with_screen.rect.right = max(total_monitor_with_screen.rect.right, thumb_window->right + monitor_dx);
+            total_monitor_with_screen.rect.bottom = max(total_monitor_with_screen.rect.bottom, thumb_window->bottom + monitor_dy);
+        }
+        // Only allow the new rect being slight bigger.
+        if (total_monitor_with_screen.width() - total_screen.width() > (thumb_window->right - thumb_window->left) / 2 ||
+            total_monitor_with_screen.height() - total_screen.height() > (thumb_window->bottom - thumb_window->top) / 2)
+        {
+            render_monitors = false;
+        }
+        if (window_state == MINIMIZED)
+        {
+            total_monitor_with_screen = total_screen;
+        }
+        auto rect_and_scale = use_overlay->get_thumbnail_rect_and_scale(0, 0, total_monitor_with_screen.width(), total_monitor_with_screen.height(), 1);
+        if (miniature_shown)
+        {
+            RECT thumbnail_pos;
+            if (render_monitors)
             {
-                animation.animation.reset(0.05, 1, 0);
-                animation.animation.value(Animation::AnimFunctions::EASE_OUT_EXPO);
+                thumbnail_pos.left = (int)((thumb_window->left + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
+                thumbnail_pos.top = (int)((thumb_window->top + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
+                thumbnail_pos.right = (int)((thumb_window->right + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
+                thumbnail_pos.bottom = (int)((thumb_window->bottom + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
             }
             else
             {
-                key_animations.erase(key_animations.begin() + id);
-                continue;
+                thumbnail_pos = use_overlay->get_thumbnail_rect_and_scale(0, 0, thumb_window->right - thumb_window->left, thumb_window->bottom - thumb_window->top, 1).rect;
+            }
+            // If the animation is done show the thumbnail
+            //   we cannot animate the thumbnail, the animation lags behind
+            miniature_shown = show_thumbnail(thumbnail_pos, current_anim_value);
+        }
+        else
+        {
+            hide_thumbnail();
+        }
+        if (window_state == MINIMIZED)
+        {
+            render_monitors = true;
+        }
+        // render the monitors
+        if (render_monitors)
+        {
+            brushColor = D2D1::ColorF(colors.desktop_fill_color, miniature_shown ? current_anim_value : current_anim_value * 0.3f);
+            brush = nullptr;
+            winrt::check_hresult(d2d_dc->CreateSolidColorBrush(brushColor, brush.put()));
+            for (auto& monitor : monitors)
+            {
+                D2D1_RECT_F monitor_rect;
+                monitor_rect.left = (float)((monitor.rect.left + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
+                monitor_rect.top = (float)((monitor.rect.top + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
+                monitor_rect.right = (float)((monitor.rect.right + monitor_dx) * rect_and_scale.scale + rect_and_scale.rect.left);
+                monitor_rect.bottom = (float)((monitor.rect.bottom + monitor_dy) * rect_and_scale.scale + rect_and_scale.rect.top);
+                d2d_dc->SetTransform(D2D1::Matrix3x2F::Identity());
+                d2d_dc->FillRectangle(monitor_rect, brush.get());
             }
         }
-        ++id;
-    }
-    // Finally: render the overlay...
-    use_overlay->render(d2d_dc);
-    // ... window arrows texts ...
-    std::wstring left, right, up, down;
-    bool left_disabled = false;
-    bool right_disabled = false;
-    bool up_disabled = false;
-    bool down_disabled = false;
-    switch (window_state)
-    {
-    case MINIMIZED:
-        left = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        left_disabled = true;
-        right = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        right_disabled = true;
-        up = GET_RESOURCE_STRING(IDS_RESTORE);
-        down = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        down_disabled = true;
-        break;
-    case MAXIMIZED:
-        left = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
-        right = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
-        up = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        up_disabled = true;
-        down = GET_RESOURCE_STRING(IDS_RESTORE);
-        break;
-    case SNAPED_TOP_LEFT:
-        left = GET_RESOURCE_STRING(IDS_SNAP_UPPER_RIGHT);
-        right = GET_RESOURCE_STRING(IDS_SNAP_UPPER_RIGHT);
-        up = GET_RESOURCE_STRING(IDS_MAXIMIZE);
-        down = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
-        break;
-    case SNAPED_LEFT:
-        left = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
-        right = GET_RESOURCE_STRING(IDS_RESTORE);
-        up = GET_RESOURCE_STRING(IDS_SNAP_UPPER_LEFT);
-        down = GET_RESOURCE_STRING(IDS_SNAP_LOWER_LEFT);
-        break;
-    case SNAPED_BOTTOM_LEFT:
-        left = GET_RESOURCE_STRING(IDS_SNAP_LOWER_RIGHT);
-        right = GET_RESOURCE_STRING(IDS_SNAP_LOWER_RIGHT);
-        up = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
-        down = GET_RESOURCE_STRING(IDS_MINIMIZE);
-        break;
-    case SNAPED_TOP_RIGHT:
-        left = GET_RESOURCE_STRING(IDS_SNAP_UPPER_LEFT);
-        right = GET_RESOURCE_STRING(IDS_SNAP_UPPER_LEFT);
-        up = GET_RESOURCE_STRING(IDS_MAXIMIZE);
-        down = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
-        break;
-    case SNAPED_RIGHT:
-        left = GET_RESOURCE_STRING(IDS_RESTORE);
-        right = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
-        up = GET_RESOURCE_STRING(IDS_SNAP_UPPER_RIGHT);
-        down = GET_RESOURCE_STRING(IDS_SNAP_LOWER_RIGHT);
-        break;
-    case SNAPED_BOTTOM_RIGHT:
-        left = GET_RESOURCE_STRING(IDS_SNAP_LOWER_LEFT);
-        right = GET_RESOURCE_STRING(IDS_SNAP_LOWER_LEFT);
-        up = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
-        down = GET_RESOURCE_STRING(IDS_MINIMIZE);
-        break;
-    case RESTORED:
-        left = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
-        right = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
-        up = GET_RESOURCE_STRING(IDS_MAXIMIZE);
-        down = GET_RESOURCE_STRING(IDS_MINIMIZE);
-        break;
-    default:
-        left = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        left_disabled = true;
-        right = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        right_disabled = true;
-        up = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        up_disabled = true;
-        down = GET_RESOURCE_STRING(IDS_NO_ACTION);
-        down_disabled = true;
-    }
-    auto text_color = D2D1::ColorF(light_mode ? 0x222222 : 0xDDDDDD, active_window_snappable && (miniature_shown || window_state == MINIMIZED) ? 1.0f : 0.3f);
-    use_overlay->find_element(L"KeyUpGroup")->SetAttributeValue(L"fill-opacity", up_disabled ? 0.3f : 1.0f);
-    text.set_alignment_center().write(d2d_dc, text_color, use_overlay->get_maximize_label(), up);
-    use_overlay->find_element(L"KeyDownGroup")->SetAttributeValue(L"fill-opacity", down_disabled ? 0.3f : 1.0f);
-    text.write(d2d_dc, text_color, use_overlay->get_minimize_label(), down);
-    use_overlay->find_element(L"KeyLeftGroup")->SetAttributeValue(L"fill-opacity", left_disabled ? 0.3f : 1.0f);
-    text.set_alignment_right().write(d2d_dc, text_color, use_overlay->get_snap_left(), left);
-    use_overlay->find_element(L"KeyRightGroup")->SetAttributeValue(L"fill-opacity", right_disabled ? 0.3f : 1.0f);
-    text.set_alignment_left().write(d2d_dc, text_color, use_overlay->get_snap_right(), right);
-    // ... and the arrows with numbers
-    for (auto&& button : tasklist_buttons)
-    {
-        if ((size_t)(button.keynum) - 1 >= arrows.size())
+        // Finalize the overlay - dimm the buttons if no thumbnail is present and show "No active window"
+        use_overlay->toggle_window_group(miniature_shown || window_state == MINIMIZED);
+        if (!miniature_shown && window_state != MINIMIZED)
         {
-            continue;
+            no_active.render(d2d_dc);
+            window_state = UNKNOWN;
         }
-        render_arrow(arrows[(size_t)(button.keynum) - 1], button, window_rect, use_overlay->get_scale(), d2d_dc);
+
+        // Set the animation - move the draw window according to animation step
+        auto popIn = D2D1::Matrix3x2F::Translation((float)x_offset, (float)y_offset);
+        d2d_dc->SetTransform(popIn);
+
+        // Animate keys
+        for (unsigned id = 0; id < key_animations.size();)
+        {
+            auto& animation = key_animations[id];
+            D2D1_COLOR_F color;
+            auto value = (float)animation.animation.value(Animation::AnimFunctions::EASE_OUT_EXPO);
+            color.a = 1.0f;
+            color.r = animation.original.r + (1.0f - animation.original.r) * value;
+            color.g = animation.original.g + (1.0f - animation.original.g) * value;
+            color.b = animation.original.b + (1.0f - animation.original.b) * value;
+            animation.button->SetAttributeValue(L"fill", color);
+            if (animation.animation.done())
+            {
+                if (value == 1)
+                {
+                    animation.animation.reset(0.05, 1, 0);
+                    animation.animation.value(Animation::AnimFunctions::EASE_OUT_EXPO);
+                }
+                else
+                {
+                    key_animations.erase(key_animations.begin() + id);
+                    continue;
+                }
+            }
+            ++id;
+        }
+        // Finally: render the overlay...
+        use_overlay->render(d2d_dc);
+        // ... window arrows texts ...
+        std::wstring left, right, up, down;
+        bool left_disabled = false;
+        bool right_disabled = false;
+        bool up_disabled = false;
+        bool down_disabled = false;
+        switch (window_state)
+        {
+        case MINIMIZED:
+            left = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            left_disabled = true;
+            right = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            right_disabled = true;
+            up = GET_RESOURCE_STRING(IDS_RESTORE);
+            down = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            down_disabled = true;
+            break;
+        case MAXIMIZED:
+            left = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
+            right = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
+            up = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            up_disabled = true;
+            down = GET_RESOURCE_STRING(IDS_RESTORE);
+            break;
+        case SNAPED_TOP_LEFT:
+            left = GET_RESOURCE_STRING(IDS_SNAP_UPPER_RIGHT);
+            right = GET_RESOURCE_STRING(IDS_SNAP_UPPER_RIGHT);
+            up = GET_RESOURCE_STRING(IDS_MAXIMIZE);
+            down = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
+            break;
+        case SNAPED_LEFT:
+            left = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
+            right = GET_RESOURCE_STRING(IDS_RESTORE);
+            up = GET_RESOURCE_STRING(IDS_SNAP_UPPER_LEFT);
+            down = GET_RESOURCE_STRING(IDS_SNAP_LOWER_LEFT);
+            break;
+        case SNAPED_BOTTOM_LEFT:
+            left = GET_RESOURCE_STRING(IDS_SNAP_LOWER_RIGHT);
+            right = GET_RESOURCE_STRING(IDS_SNAP_LOWER_RIGHT);
+            up = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
+            down = GET_RESOURCE_STRING(IDS_MINIMIZE);
+            break;
+        case SNAPED_TOP_RIGHT:
+            left = GET_RESOURCE_STRING(IDS_SNAP_UPPER_LEFT);
+            right = GET_RESOURCE_STRING(IDS_SNAP_UPPER_LEFT);
+            up = GET_RESOURCE_STRING(IDS_MAXIMIZE);
+            down = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
+            break;
+        case SNAPED_RIGHT:
+            left = GET_RESOURCE_STRING(IDS_RESTORE);
+            right = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
+            up = GET_RESOURCE_STRING(IDS_SNAP_UPPER_RIGHT);
+            down = GET_RESOURCE_STRING(IDS_SNAP_LOWER_RIGHT);
+            break;
+        case SNAPED_BOTTOM_RIGHT:
+            left = GET_RESOURCE_STRING(IDS_SNAP_LOWER_LEFT);
+            right = GET_RESOURCE_STRING(IDS_SNAP_LOWER_LEFT);
+            up = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
+            down = GET_RESOURCE_STRING(IDS_MINIMIZE);
+            break;
+        case RESTORED:
+            left = GET_RESOURCE_STRING(IDS_SNAP_LEFT);
+            right = GET_RESOURCE_STRING(IDS_SNAP_RIGHT);
+            up = GET_RESOURCE_STRING(IDS_MAXIMIZE);
+            down = GET_RESOURCE_STRING(IDS_MINIMIZE);
+            break;
+        default:
+            left = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            left_disabled = true;
+            right = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            right_disabled = true;
+            up = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            up_disabled = true;
+            down = GET_RESOURCE_STRING(IDS_NO_ACTION);
+            down_disabled = true;
+        }
+        auto text_color = D2D1::ColorF(light_mode ? 0x222222 : 0xDDDDDD, active_window_snappable && (miniature_shown || window_state == MINIMIZED) ? 1.0f : 0.3f);
+        use_overlay->find_element(L"KeyUpGroup")->SetAttributeValue(L"fill-opacity", up_disabled ? 0.3f : 1.0f);
+        text.set_alignment_center().write(d2d_dc, text_color, use_overlay->get_maximize_label(), up);
+        use_overlay->find_element(L"KeyDownGroup")->SetAttributeValue(L"fill-opacity", down_disabled ? 0.3f : 1.0f);
+        text.write(d2d_dc, text_color, use_overlay->get_minimize_label(), down);
+        use_overlay->find_element(L"KeyLeftGroup")->SetAttributeValue(L"fill-opacity", left_disabled ? 0.3f : 1.0f);
+        text.set_alignment_right().write(d2d_dc, text_color, use_overlay->get_snap_left(), left);
+        use_overlay->find_element(L"KeyRightGroup")->SetAttributeValue(L"fill-opacity", right_disabled ? 0.3f : 1.0f);
+        text.set_alignment_left().write(d2d_dc, text_color, use_overlay->get_snap_right(), right);
+        // ... and the arrows with numbers
+        for (auto&& button : tasklist_buttons)
+        {
+            if ((size_t)(button.keynum) - 1 >= arrows.size())
+            {
+                continue;
+            }
+            render_arrow(arrows[(size_t)(button.keynum) - 1], button, window_rect, use_overlay->get_scale(), d2d_dc);
+        }
+    }
+    catch (winrt::hresult_error const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Failed at D2DOverlayWindow::render.\nPlease report the bug to https://aka.ms/powerToysReportBug", L"PowerToys Error", MB_OK);
+            fatalErrorOccurred = true;
+        }
+    }
+    catch (PWSTR const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Fatal Error Occurred.\nPlease report the bug to https://aka.ms/powerToysReportBug", ex, MB_OK);
+            fatalErrorOccurred = true;
+        }
     }
 }

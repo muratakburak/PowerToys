@@ -10,7 +10,12 @@ namespace PTSettingsHelper
     std::wstring get_root_save_folder_location()
     {
         PWSTR local_app_path;
-        winrt::check_hresult(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &local_app_path));
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, NULL, &local_app_path)))
+        {
+            MessageBox(NULL, L"Failed at PTSettingsHelper::get_root_save_folder_location.\nPlease report the bug to https://aka.ms/powerToysReportBug", L"PowerToys Error", MB_OK);
+            throw L"Failed at PTSettingsHelper::get_root_save_folder_location";
+        }
+        
         std::wstring result{ local_app_path };
         CoTaskMemFree(local_app_path);
 

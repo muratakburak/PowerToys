@@ -16,17 +16,26 @@ void Tasklist::update()
     tasklist_hwnd = FindWindowExA(tasklist_hwnd, 0, "MSTaskListWClass", nullptr);
     if (!tasklist_hwnd)
         return;
-    if (!automation)
+    try
     {
-        winrt::check_hresult(CoCreateInstance(CLSID_CUIAutomation,
-                                              nullptr,
-                                              CLSCTX_INPROC_SERVER,
-                                              IID_IUIAutomation,
-                                              automation.put_void()));
-        winrt::check_hresult(automation->CreateTrueCondition(true_condition.put()));
+        if (!automation)
+        {
+            winrt::check_hresult(CoCreateInstance(CLSID_CUIAutomation,
+                                                  nullptr,
+                                                  CLSCTX_INPROC_SERVER,
+                                                  IID_IUIAutomation,
+                                                  automation.put_void()));
+            winrt::check_hresult(automation->CreateTrueCondition(true_condition.put()));
+        }
+        element = nullptr;
+        winrt::check_hresult(automation->ElementFromHandle(tasklist_hwnd, element.put()));
     }
-    element = nullptr;
-    winrt::check_hresult(automation->ElementFromHandle(tasklist_hwnd, element.put()));
+    catch (winrt::hresult_error const& ex)
+    {
+        MessageBox(NULL, L"Failed at Tasklist::update.\nPlease report the bug to https://aka.ms/powerToysReportBug", L"PowerToys Error", MB_OK);
+        throw L"Failed at Tasklist::update";
+    }
+    
 }
 
 bool Tasklist::update_buttons(std::vector<TasklistButton>& buttons)

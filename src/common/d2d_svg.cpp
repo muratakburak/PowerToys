@@ -3,27 +3,34 @@
 
 D2DSVG& D2DSVG::load(const std::wstring& filename, ID2D1DeviceContext5* d2d_dc)
 {
-    svg = nullptr;
-    winrt::com_ptr<IStream> svg_stream;
-    winrt::check_hresult(SHCreateStreamOnFileEx(filename.c_str(),
-                                                STGM_READ,
-                                                FILE_ATTRIBUTE_NORMAL,
-                                                FALSE,
-                                                nullptr,
-                                                svg_stream.put()));
+    try
+    {
+        svg = nullptr;
+        winrt::com_ptr<IStream> svg_stream;
+        winrt::check_hresult(SHCreateStreamOnFileEx(filename.c_str(),
+                                                    STGM_READ,
+                                                    FILE_ATTRIBUTE_NORMAL,
+                                                    FALSE,
+                                                    nullptr,
+                                                    svg_stream.put()));
 
-    winrt::check_hresult(d2d_dc->CreateSvgDocument(
-        svg_stream.get(),
-        D2D1::SizeF(1, 1),
-        svg.put()));
-
-    winrt::com_ptr<ID2D1SvgElement> root;
-    svg->GetRoot(root.put());
-    float tmp;
-    winrt::check_hresult(root->GetAttributeValue(L"width", &tmp));
-    svg_width = (int)tmp;
-    winrt::check_hresult(root->GetAttributeValue(L"height", &tmp));
-    svg_height = (int)tmp;
+        winrt::check_hresult(d2d_dc->CreateSvgDocument(
+            svg_stream.get(),
+            D2D1::SizeF(1, 1),
+            svg.put()));
+        winrt::com_ptr<ID2D1SvgElement> root;
+        svg->GetRoot(root.put());
+        float tmp;
+        winrt::check_hresult(root->GetAttributeValue(L"width", &tmp));
+        svg_width = (int)tmp;
+        winrt::check_hresult(root->GetAttributeValue(L"height", &tmp));
+        svg_height = (int)tmp;
+    }
+    catch (winrt::hresult_error const& ex)
+    {
+        throw L"Failed at D2DSVG::load";
+    }
+    
     return *this;
 }
 
@@ -46,35 +53,43 @@ D2DSVG& D2DSVG::resize(int x, int y, int width, int height, float fill, float ma
 
 D2DSVG& D2DSVG::recolor(uint32_t oldcolor, uint32_t newcolor)
 {
-    auto new_color = D2D1::ColorF(newcolor & 0xFFFFFF, 1);
-    auto old_color = D2D1::ColorF(oldcolor & 0xFFFFFF, 1);
-    std::function<void(ID2D1SvgElement * element)> recurse = [&](ID2D1SvgElement* element) {
-        if (!element)
-            return;
-        if (element->IsAttributeSpecified(L"fill"))
-        {
-            D2D1_COLOR_F elem_fill;
-            winrt::com_ptr<ID2D1SvgPaint> paint;
-            element->GetAttributeValue(L"fill", paint.put());
-            paint->GetColor(&elem_fill);
-            if (elem_fill.r == old_color.r && elem_fill.g == old_color.g && elem_fill.b == old_color.b)
+    try
+    {
+        auto new_color = D2D1::ColorF(newcolor & 0xFFFFFF, 1);
+        auto old_color = D2D1::ColorF(oldcolor & 0xFFFFFF, 1);
+        std::function<void(ID2D1SvgElement * element)> recurse = [&](ID2D1SvgElement* element) {
+            if (!element)
+                return;
+            if (element->IsAttributeSpecified(L"fill"))
             {
-                winrt::check_hresult(element->SetAttributeValue(L"fill", new_color));
+                D2D1_COLOR_F elem_fill;
+                winrt::com_ptr<ID2D1SvgPaint> paint;
+                element->GetAttributeValue(L"fill", paint.put());
+                paint->GetColor(&elem_fill);
+                if (elem_fill.r == old_color.r && elem_fill.g == old_color.g && elem_fill.b == old_color.b)
+                {
+                    winrt::check_hresult(element->SetAttributeValue(L"fill", new_color));
+                }
             }
-        }
-        winrt::com_ptr<ID2D1SvgElement> sub;
-        element->GetFirstChild(sub.put());
-        while (sub)
-        {
-            recurse(sub.get());
-            winrt::com_ptr<ID2D1SvgElement> next;
-            element->GetNextChild(sub.get(), next.put());
-            sub = next;
-        }
-    };
-    winrt::com_ptr<ID2D1SvgElement> root;
-    svg->GetRoot(root.put());
-    recurse(root.get());
+            winrt::com_ptr<ID2D1SvgElement> sub;
+            element->GetFirstChild(sub.put());
+            while (sub)
+            {
+                recurse(sub.get());
+                winrt::com_ptr<ID2D1SvgElement> next;
+                element->GetNextChild(sub.get(), next.put());
+                sub = next;
+            }
+        };
+        winrt::com_ptr<ID2D1SvgElement> root;
+        svg->GetRoot(root.put());
+        recurse(root.get());
+    }
+    catch (winrt::hresult_error const& ex)
+    {
+        throw L"Failed at D2DSVG::recolor";
+    }
+    
     return *this;
 }
 
@@ -102,7 +117,12 @@ D2DSVG& D2DSVG::toggle_element(const wchar_t* id, bool visible)
 winrt::com_ptr<ID2D1SvgElement> D2DSVG::find_element(const std::wstring& id)
 {
     winrt::com_ptr<ID2D1SvgElement> element;
-    winrt::check_hresult(svg->FindElementById(id.c_str(), element.put()));
+    if (FAILED(svg->FindElementById(id.c_str(), element.put())))
+    {
+        MessageBox(NULL, L"Failed at D2DSVG::find_element.\nPlease report the bug to https://aka.ms/powerToysReportBug", L"PowerToys Error", MB_OK);
+        throw L"Failed at D2DSVG::find_element";
+    }
+    
     return element;
 }
 

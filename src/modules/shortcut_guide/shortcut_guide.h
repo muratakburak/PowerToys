@@ -6,6 +6,9 @@
 
 #include <common/LowlevelKeyboardEvent.h>
 
+
+bool static fatalErrorOccurred = false;
+
 // We support only one instance of the overlay
 extern class OverlayWindow* instance;
 

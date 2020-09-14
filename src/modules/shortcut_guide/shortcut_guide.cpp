@@ -186,50 +186,65 @@ constexpr UINT alternative_switch_vk_code = VK_OEM_2;
 
 void OverlayWindow::enable()
 {
-    auto switcher = [&](HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) -> LRESULT {
-        if (msg == WM_KEYDOWN && wparam == VK_ESCAPE && instance->target_state->active())
-        {
-            instance->target_state->toggle_force_shown();
-            return 0;
-        }
-        if (msg != WM_HOTKEY)
-        {
-            return 0;
-        }
-        const auto vk_code = HIWORD(lparam);
-        const auto modifiers_mask = LOWORD(lparam);
-        if (alternative_switch_vk_code != vk_code || alternative_switch_modifier_mask != modifiers_mask)
-        {
-            return 0;
-        }
-        instance->target_state->toggle_force_shown();
-        return 0;
-    };
-
-    if (!_enabled)
+    try
     {
-        Trace::EnableShortcutGuide(true);
-        winkey_popup = std::make_unique<D2DOverlayWindow>(std::move(switcher));
-        winkey_popup->apply_overlay_opacity(((float)overlayOpacity.value) / 100.0f);
-        winkey_popup->set_theme(theme.value);
-        target_state = std::make_unique<TargetState>(pressTime.value);
-        winkey_popup->initialize();
-#if defined(DISABLE_LOWLEVEL_HOOKS_WHEN_DEBUGGED)
-        const bool hook_disabled = IsDebuggerPresent();
-#else
-        const bool hook_disabled = false;
-#endif
-        if (!hook_disabled)
+        if (!fatalErrorOccurred)
         {
-            hook_handle = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(NULL), NULL);
-            if (!hook_handle)
+            auto switcher = [&](HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) -> LRESULT {
+                if (msg == WM_KEYDOWN && wparam == VK_ESCAPE && instance->target_state->active())
+                {
+                    instance->target_state->toggle_force_shown();
+                    return 0;
+                }
+                if (msg != WM_HOTKEY)
+                {
+                    return 0;
+                }
+                const auto vk_code = HIWORD(lparam);
+                const auto modifiers_mask = LOWORD(lparam);
+                if (alternative_switch_vk_code != vk_code || alternative_switch_modifier_mask != modifiers_mask)
+                {
+                    return 0;
+                }
+                instance->target_state->toggle_force_shown();
+                return 0;
+            };
+
+            if (!_enabled)
             {
-                MessageBoxW(NULL, L"Cannot install keyboard listener.", L"PowerToys - Shortcut Guide", MB_OK | MB_ICONERROR);
+                Trace::EnableShortcutGuide(true);
+                winkey_popup = std::make_unique<D2DOverlayWindow>(std::move(switcher));
+                winkey_popup->apply_overlay_opacity(((float)overlayOpacity.value) / 100.0f);
+                winkey_popup->set_theme(theme.value);
+                target_state = std::make_unique<TargetState>(pressTime.value);
+                winkey_popup->initialize();
+#if defined(DISABLE_LOWLEVEL_HOOKS_WHEN_DEBUGGED)
+                const bool hook_disabled = IsDebuggerPresent();
+#else
+                const bool hook_disabled = false;
+#endif
+                if (!hook_disabled)
+                {
+                    hook_handle = SetWindowsHookEx(WH_KEYBOARD_LL, LowLevelKeyboardProc, GetModuleHandle(NULL), NULL);
+                    if (!hook_handle)
+                    {
+                        MessageBoxW(NULL, L"Cannot install keyboard listener.", L"PowerToys - Shortcut Guide", MB_OK | MB_ICONERROR);
+                    }
+                }
+                RegisterHotKey(winkey_popup->get_window_handle(), alternative_switch_hotkey_id, alternative_switch_modifier_mask, alternative_switch_vk_code);
             }
+            _enabled = true;
         }
-        RegisterHotKey(winkey_popup->get_window_handle(), alternative_switch_hotkey_id, alternative_switch_modifier_mask, alternative_switch_vk_code);
     }
-    _enabled = true;
+    catch (PWSTR const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Fatal Error Occurred.\nPlease report the bug to https://aka.ms/powerToysReportBug", ex, MB_OK);
+            _enabled = false;
+            fatalErrorOccurred = true;
+        }
+    }
 }
 
 void OverlayWindow::disable(bool trace_event)
@@ -292,7 +307,20 @@ intptr_t OverlayWindow::signal_event(LowlevelKeyboardEvent* event)
 void OverlayWindow::on_held()
 {
     auto windowInfo = GetShortcutGuideWindowInfo();
-    winkey_popup->show(windowInfo.hwnd, windowInfo.snappable);
+    try
+    {
+        winkey_popup->show(windowInfo.hwnd, windowInfo.snappable);
+    }
+    catch (PWSTR const& ex)
+    {
+        if (!fatalErrorOccurred)
+        {
+            MessageBox(NULL, L"Fatal Error Occurred.\nPlease report the bug to https://aka.ms/powerToysReportBug", ex, MB_OK);
+            _enabled = false;
+            fatalErrorOccurred = true;
+        }
+    }
+    
 }
 
 void OverlayWindow::on_held_press(DWORD vkCode)
